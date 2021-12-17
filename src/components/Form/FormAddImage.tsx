@@ -2,19 +2,22 @@ import { Box, Button, Stack, useToast } from '@chakra-ui/react';
 import { useForm } from 'react-hook-form';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from 'react-query';
+
 import { api } from '../../services/api';
 import { FileInput } from '../Input/FileInput';
 import { TextInput } from '../Input/TextInput';
 
-interface FormValues {
-  image: FileList;
-  title: string;
-  description: string;
-}
-
 interface FormAddImageProps {
   closeModal: () => void;
 }
+
+interface IFormSubmitData {
+  title: string;
+  description: string;
+  url: string;
+}
+
+const MAX_FILE_SIZE = 1000000;
 
 export function FormAddImage({ closeModal }: FormAddImageProps): JSX.Element {
   const [imageUrl, setImageUrl] = useState('');
@@ -26,83 +29,71 @@ export function FormAddImage({ closeModal }: FormAddImageProps): JSX.Element {
       required: 'Arquivo obrigatório',
       validate: {
         lessThan10MB: fileList =>
-          fileList[0].size < 10485760 || 'O arquivo deve ser menor que 10MB',
-        acceptedFormats: fileList =>
-          /(?:([^:/?#]+):)?(?:([^/?#]*))?([^?#](?:jpeg|gif|png))(?:\?([^#]*))?(?:#(.*))?/g.test(
-            fileList[0].type
-          ) || 'Somente são aceitos arquivos PNG, JPEG e GIF',
+          fileList[0].size < MAX_FILE_SIZE ||
+          'O arquivo deve ser menor que 10MB',
+        acceptedFormats: v =>
+          /image\/(jpeg|png|gif)/.test(v[0].type) ||
+          'Somente são aceitos arquivos PNG, JPEG e GIF',
       },
     },
     title: {
       required: 'Título obrigatório',
-      minLength: {
-        value: 2,
-        message: 'Mínimo de 2 caracteres',
-      },
-      maxLength: {
-        value: 20,
-        message: 'Máximo de 20 caracteres',
-      },
+      minLength: 'Mínimo de 2 caracteres',
+      maxLength: 'Máximo de 20 caracteres',
     },
     description: {
       required: 'Descrição obrigatória',
-      maxLength: {
-        value: 65,
-        message: 'Máximo de 65 caracteres',
-      },
+      maxLength: 'Máximo de 65 caracteres',
     },
   };
 
   const queryClient = useQueryClient();
-  const mutation = useMutation(
-    async formData => {
-      const data = await api.post('/images', formData);
-      return data;
-    },
-    {
-      onSuccess: () => queryClient.invalidateQueries('images'),
-    }
+  const mutation = useMutation(async (data: IFormSubmitData): Promise<any> => {
+    const response = await api.post('api/images', data);
+    return response.data;
+  },
+    { onSuccess: () => queryClient.invalidateQueries('images') }
   );
 
   const { register, handleSubmit, reset, formState, setError, trigger } =
     useForm();
   const { errors } = formState;
 
-  const onSubmit = async (data: FormValues): Promise<void> => {
+  const onSubmit = async (data: IFormSubmitData): Promise<void> => {
     try {
       if (!imageUrl) {
         toast({
-          title: 'Imagem não adicionada',
-          description:
-            'É preciso adicionar e aguardar o upload de uma imagem antes de realizar o cadastro.',
           status: 'error',
-          duration: 3000,
-          isClosable: true,
+          title: 'Imagem não adicionada',
+          description: `É preciso adicionar e aguardar o upload de uma imagem 
+            antes de realizar o cadastro`,
+          isClosable: true
         });
+        return;
       }
+      console.log(data, imageUrl)
 
-      const response = await mutation.mutateAsync(data);
+      await mutation.mutateAsync({
+        title: data.title,
+        description: data.description,
+        url: imageUrl
+      });
 
-      if (response.status === 201) {
-        toast({
-          title: 'Imagem cadastrada',
-          description: 'Sua imagem foi cadastrada com sucesso.',
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-      }
-    } catch {
       toast({
-        title: 'Falha no cadastro',
-        description: 'Ocorreu um erro ao tentar cadastrar a sua imagem.',
+        status: 'success',
+        title: 'Imagem cadastrada',
+        description: 'Sua imagem foi cadastrada com sucesso',
+      });
+    } catch (ex) {
+      console.log(ex);
+      toast({
         status: 'error',
-        duration: 3000,
-        isClosable: true,
+        title: 'Falha no cadastro',
+        description: 'Ocorreu um erro ao tentar cadastrar a sua imagem',
+        isClosable: true
       });
     } finally {
       reset();
-      setImageUrl('');
       setLocalImageUrl('');
       closeModal();
     }
