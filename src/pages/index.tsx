@@ -5,10 +5,36 @@ import { useInfiniteQuery } from 'react-query';
 import { Header } from '../components/Header';
 import { CardList } from '../components/CardList';
 import { api } from '../services/api';
-import { Loading } from '../components/Loading';
-import { Error } from '../components/Error';
+
+
+interface Card {
+  title: string;
+  description: string;
+  url: string;
+  ts: number;
+  id: string;
+}
+
+type IQueryResponse = {
+  after: number | null;
+  data: Card[];
+};
+
 
 export default function Home(): JSX.Element {
+
+  const fetchImages = async ({
+    pageParam = null,
+  }): Promise<IQueryResponse> => {
+    const { data } = await api.get('/images', {
+      params: {
+        after: pageParam,
+      },
+    });
+    return data;
+  };
+
+
   const {
     data,
     isLoading,
@@ -16,15 +42,20 @@ export default function Home(): JSX.Element {
     isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
-  } = useInfiniteQuery(
+  } = useInfiniteQuery<unknown, unknown, IQueryResponse>(
     'images',
     // TODO AXIOS REQUEST WITH PARAM
+    fetchImages
     ,
     // TODO GET AND RETURN NEXT PAGE PARAM
+    {
+      getNextPageParam: (after) => after === undefined ? null : after
+    }
   );
 
   const formattedData = useMemo(() => {
     // TODO FORMAT AND FLAT DATA ARRAY
+    return data?.pages.map(p => p.data).flat()
   }, [data]);
 
   // TODO RENDER LOADING SCREEN
